@@ -111,6 +111,7 @@ typedef struct {
 	bool m_output_on;
 	float m_pos_pid_set;
 	float m_speed_pid_set_rpm;
+        float m_speed_pid_est_rpm;
 	float m_speed_command_rpm;
 	float m_phase_now_observer;
 	float m_phase_now_observer_override;
@@ -3744,6 +3745,7 @@ static void run_pid_control_speed(float dt, volatile motor_all_state_t *motor) {
 #endif
 		motor->m_speed_i_term = 0.0;
 		motor->m_speed_prev_error = 0.0;
+		motor->m_speed_pid_est_rpm = 0.0;
 		return;
 	}
 
@@ -3751,7 +3753,14 @@ static void run_pid_control_speed(float dt, volatile motor_all_state_t *motor) {
 		utils_step_towards((float*)&motor->m_speed_pid_set_rpm, motor->m_speed_command_rpm, conf_now->s_pid_ramp_erpms_s * dt);
 	}
 
-	const float rpm = mcpwm_foc_get_rpm();
+	// Filter low rpm noise
+	// Fixed in low end until (600-400)*1.05 eprm, then linearly decrease filtering until at 600 erpm
+	float rpm_dynamic_filter = 1.0f-(0.0025f*(600.0f-fabsf(motor->m_speed_pid_est_rpm)));
+	utils_truncate_number(&rpm_dynamic_filter, 0.05, 1.0);
+
+	UTILS_LP_FAST(motor->m_speed_pid_est_rpm, mcpwm_foc_get_rpm(), rpm_dynamic_filter);
+	const float rpm = motor->m_speed_pid_est_rpm;
+
 	float error = motor->m_speed_pid_set_rpm - rpm;
 
 	// Too low RPM set. Reset state and return.
