@@ -807,7 +807,11 @@ void mcpwm_foc_set_duty_noramp(float dutyCycle) {
  */
 void mcpwm_foc_set_pid_speed(float rpm) {
 	if (motor_now()->m_conf->s_pid_ramp_erpms_s > 0.0 ) {
+#ifndef FOC_SPEED_CONTROL_DUTY
 		if (motor_now()->m_control_mode != CONTROL_MODE_SPEED ||
+#else
+		if (motor_now()->m_control_mode != CONTROL_MODE_FOC_SPEED_DUTY ||
+#endif
 				motor_now()->m_state != MC_STATE_RUNNING) {
 			motor_now()->m_speed_pid_set_rpm = mcpwm_foc_get_rpm();
 		}
@@ -817,8 +821,11 @@ void mcpwm_foc_set_pid_speed(float rpm) {
 		motor_now()->m_speed_pid_set_rpm = rpm;
 	}
 
+#ifndef FOC_SPEED_CONTROL_DUTY
 	motor_now()->m_control_mode = CONTROL_MODE_SPEED;
-
+#else
+	motor_now()->m_control_mode = CONTROL_MODE_FOC_SPEED_DUTY;
+#endif
 	if (motor_now()->m_state != MC_STATE_RUNNING) {
 		motor_now()->m_state = MC_STATE_RUNNING;
 	}
@@ -2348,6 +2355,7 @@ void mcpwm_foc_adc_int_handler(void *p, uint32_t flags) {
 
 		float duty_set = motor_now->m_duty_cycle_set;
 		bool control_duty = motor_now->m_control_mode == CONTROL_MODE_DUTY ||
+				motor_now->m_control_mode == CONTROL_MODE_FOC_SPEED_DUTY ||
 				motor_now->m_control_mode == CONTROL_MODE_OPENLOOP_DUTY ||
 				motor_now->m_control_mode == CONTROL_MODE_OPENLOOP_DUTY_PHASE;
 
@@ -2366,7 +2374,11 @@ void mcpwm_foc_adc_int_handler(void *p, uint32_t flags) {
 		}
 
 		// Brake when set ERPM is below min ERPM
+#ifndef FOC_SPEED_CONTROL_DUTY
 		if (motor_now->m_control_mode == CONTROL_MODE_SPEED &&
+#else
+		if (motor_now->m_control_mode == CONTROL_MODE_FOC_SPEED_DUTY &&
+#endif
 				fabsf(motor_now->m_speed_pid_set_rpm) < conf_now->s_pid_min_erpm) {
 			control_duty = true;
 			duty_set = 0.0;
@@ -3725,7 +3737,11 @@ static void run_pid_control_speed(float dt, volatile motor_all_state_t *motor) {
 	float d_term;
 
 	// PID is off. Return.
-	if (motor->m_control_mode != CONTROL_MODE_SPEED) {
+#ifndef FOC_SPEED_CONTROL_DUTY
+	if (motor->m_control_mode != CONTROL_MODE_SPEED ) {
+#else
+	if ( motor->m_control_mode != CONTROL_MODE_FOC_SPEED_DUTY ) {
+#endif
 		motor->m_speed_i_term = 0.0;
 		motor->m_speed_prev_error = 0.0;
 		return;
@@ -3774,8 +3790,11 @@ static void run_pid_control_speed(float dt, volatile motor_all_state_t *motor) {
 			output = 0.0;
 		}
 	}
-
+#ifndef FOC_SPEED_CONTROL_DUTY
 	motor->m_iq_set = output * conf_now->lo_current_max;
+#else
+	motor_now()->m_duty_cycle_set = output;
+#endif
 }
 
 static void stop_pwm_hw(volatile motor_all_state_t *motor) {
