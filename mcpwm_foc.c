@@ -111,7 +111,7 @@ typedef struct {
 	bool m_output_on;
 	float m_pos_pid_set;
 	float m_speed_pid_set_rpm;
-        float m_speed_pid_est_rpm;
+	float m_speed_pid_est_rpm;
 	float m_speed_command_rpm;
 	float m_phase_now_observer;
 	float m_phase_now_observer_override;
